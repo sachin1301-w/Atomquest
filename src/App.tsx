@@ -188,7 +188,7 @@ function AuthScreen({
           </button>
         </div>
 
-        {notice ? <div className="banner success">{notice}</div> : null}
+       
         {authError ? <div className="banner danger">{authError}</div> : null}
 
         {mode === 'signup' ? (
