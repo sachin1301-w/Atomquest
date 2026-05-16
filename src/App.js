@@ -1,8 +1,9 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createEmployeeSignupRecords, createSeedState } from './data';
 import { calculateProgress, createAuditEntry, directionLabel, formatDate, formatDateTime, getQuarterCode, getQuarterLabel, isoNow, statusTone, summarizeProgress, toCsv, toDateInputValue, uid, validateSheet, } from './utils';
 const STORAGE_KEY = 'atomquest.goal.portal.state.v1';
+const CLOUD_STATE_URL = import.meta.env.VITE_CLOUD_STATE_URL?.trim() || '';
 const thrustAreas = ['Revenue Growth', 'Operational Excellence', 'Service Quality', 'Risk & Safety', 'Shared KPI'];
 const uomOptions = ['Numeric', 'Percent', 'Timeline', 'Zero'];
 const directionOptions = ['Min', 'Max'];
@@ -41,6 +42,23 @@ function loadState() {
     catch {
         return createSeedState();
     }
+}
+function mergeUniqueById(primary, secondary) {
+    const map = new Map();
+    secondary.forEach((item) => map.set(item.id, item));
+    primary.forEach((item) => map.set(item.id, { ...(map.get(item.id) ?? {}), ...item }));
+    return [...map.values()];
+}
+function mergeAppState(base, incoming) {
+    return {
+        ...base,
+        ...incoming,
+        users: mergeUniqueById(incoming.users ?? [], base.users),
+        employees: mergeUniqueById(incoming.employees ?? [], base.employees),
+        goalSheets: mergeUniqueById(incoming.goalSheets ?? [], base.goalSheets),
+        auditTrail: mergeUniqueById(incoming.auditTrail ?? [], base.auditTrail),
+        activeUserId: null,
+    };
 }
 function goalTemplate() {
     return {
@@ -90,25 +108,28 @@ function AuthScreen({ onSignIn, onSignUp, }) {
     const [signupEmail, setSignupEmail] = useState('');
     const [signupPassword, setSignupPassword] = useState('');
     const [signupManagerCode, setSignupManagerCode] = useState('1301');
-    const [notice, setNotice] = useState('Create a new employee account or sign in to your existing account. Managers can use the manager login.');
     const [authError, setAuthError] = useState('');
+    const [authNotice, setAuthNotice] = useState('');
+    // Backward-compatible aliases to avoid breakage during partial merges/cherry-picks.
+    const notice = authNotice;
+    const setNotice = setAuthNotice;
     function submitSignIn(event) {
         event.preventDefault();
         const message = onSignIn(signinEmail.trim(), signinPassword);
         if (message) {
             setAuthError(message);
-            setNotice('');
+            setAuthNotice('');
             return;
         }
         setAuthError('');
-        setNotice('');
+        setAuthNotice('');
     }
     function submitSignUp(event) {
         event.preventDefault();
         const message = onSignUp(signupName.trim(), signupDob, signupEmail.trim(), signupPassword, signupManagerCode.trim());
         if (message) {
             setAuthError(message);
-            setNotice('');
+            setAuthNotice('');
             return;
         }
         setMode('employee-signin');
@@ -119,17 +140,54 @@ function AuthScreen({ onSignIn, onSignUp, }) {
         setSignupEmail('');
         setSignupPassword('');
         setAuthError('');
-        setNotice('Account created successfully. Please sign in with the new employee credentials.');
+        setAuthNotice('Account created successfully. Please sign in with the new employee credentials.');
     }
-    return (_jsx("div", { className: "auth-shell", children: _jsxs("section", { className: "auth-card panel", children: [_jsxs("div", { className: "auth-header", children: [_jsx("p", { className: "eyebrow", children: "Atomquest Goal Portal" }), _jsx("h1", { children: "Authentication" }), _jsx("p", { children: "Create a new employee account, sign in as an employee, or access the manager login." })] }), _jsxs("div", { className: "auth-tabs", children: [_jsx("button", { className: `auth-tab ${mode === 'signup' ? 'active' : ''}`, onClick: () => setMode('signup'), type: "button", children: "Employee sign up" }), _jsx("button", { className: `auth-tab ${mode === 'employee-signin' ? 'active' : ''}`, onClick: () => setMode('employee-signin'), type: "button", children: "Employee sign in" }), _jsx("button", { className: `auth-tab ${mode === 'manager-login' ? 'active' : ''}`, onClick: () => setMode('manager-login'), type: "button", children: "Manager login" })] }), notice ? _jsx("div", { className: "banner success", children: notice }) : null, authError ? _jsx("div", { className: "banner danger", children: authError }) : null, mode === 'signup' ? (_jsxs("form", { className: "auth-form stack", onSubmit: submitSignUp, children: [_jsx("label", { className: "field-label", htmlFor: "signup-name", children: "Employee Name" }), _jsx("input", { id: "signup-name", className: "input", type: "text", value: signupName, onChange: (event) => setSignupName(event.target.value), placeholder: "John Doe" }), _jsx("label", { className: "field-label", htmlFor: "signup-dob", children: "Date of Birth" }), _jsx("input", { id: "signup-dob", className: "input", type: "date", value: signupDob, onChange: (event) => setSignupDob(event.target.value) }), _jsx("label", { className: "field-label", htmlFor: "signup-email", children: "Employee email" }), _jsx("input", { id: "signup-email", className: "input", type: "email", value: signupEmail, onChange: (event) => setSignupEmail(event.target.value), placeholder: "employee@example.com" }), _jsx("label", { className: "field-label", htmlFor: "signup-password", children: "Set password" }), _jsx("input", { id: "signup-password", className: "input", type: "password", value: signupPassword, onChange: (event) => setSignupPassword(event.target.value), placeholder: "Create a password" }), _jsx("label", { className: "field-label", htmlFor: "signup-manager", children: "Manager employee ID" }), _jsx("input", { id: "signup-manager", className: "input", value: signupManagerCode, onChange: (event) => setSignupManagerCode(event.target.value), placeholder: "1301" }), _jsx("button", { className: "button primary", type: "submit", children: "Create employee account" }), _jsx("div", { className: "hint", children: "Example manager: email sk.39648215@gmail.com, employee ID 1301" })] })) : mode === 'employee-signin' ? (_jsxs("form", { className: "auth-form stack", onSubmit: submitSignIn, children: [_jsx("label", { className: "field-label", htmlFor: "signin-email", children: "Email" }), _jsx("input", { id: "signin-email", className: "input", type: "email", value: signinEmail, onChange: (event) => setSigninEmail(event.target.value), placeholder: "employee@example.com" }), _jsx("label", { className: "field-label", htmlFor: "signin-password", children: "Password" }), _jsx("input", { id: "signin-password", className: "input", type: "password", value: signinPassword, onChange: (event) => setSigninPassword(event.target.value), placeholder: "Your password" }), _jsx("button", { className: "button primary", type: "submit", children: "Sign in" })] })) : (_jsxs("form", { className: "auth-form stack", onSubmit: submitSignIn, children: [_jsx("label", { className: "field-label", htmlFor: "manager-email", children: "Manager email" }), _jsx("input", { id: "manager-email", className: "input", type: "email", value: signinEmail, onChange: (event) => setSigninEmail(event.target.value), placeholder: "manager@example.com" }), _jsx("label", { className: "field-label", htmlFor: "manager-password", children: "Password" }), _jsx("input", { id: "manager-password", className: "input", type: "password", value: signinPassword, onChange: (event) => setSigninPassword(event.target.value), placeholder: "Your password" }), _jsx("button", { className: "button primary", type: "submit", children: "Manager login" }), _jsx("div", { className: "hint", children: "Example: sk.39648215@gmail.com | Sachin1301" })] }))] }) }));
+    return (_jsx("div", { className: "auth-shell", children: _jsxs("section", { className: "auth-card panel", children: [_jsxs("div", { className: "auth-header", children: [_jsx("p", { className: "eyebrow", children: "Atomquest Goal Portal" }), _jsx("h1", { children: "Authentication" }), _jsx("p", { children: "Create a new employee account, sign in as an employee, or access the manager login." })] }), _jsxs("div", { className: "auth-tabs", children: [_jsx("button", { className: `auth-tab ${mode === 'signup' ? 'active' : ''}`, onClick: () => setMode('signup'), type: "button", children: "Employee sign up" }), _jsx("button", { className: `auth-tab ${mode === 'employee-signin' ? 'active' : ''}`, onClick: () => setMode('employee-signin'), type: "button", children: "Employee sign in" }), _jsx("button", { className: `auth-tab ${mode === 'manager-login' ? 'active' : ''}`, onClick: () => setMode('manager-login'), type: "button", children: "Manager login" })] }), authError ? _jsx("div", { className: "banner danger", children: authError }) : null, authNotice ? _jsx("div", { className: "banner success", children: authNotice }) : null, mode === 'signup' ? (_jsxs("form", { className: "auth-form stack", onSubmit: submitSignUp, children: [_jsx("label", { className: "field-label", htmlFor: "signup-name", children: "Employee Name" }), _jsx("input", { id: "signup-name", className: "input", type: "text", value: signupName, onChange: (event) => setSignupName(event.target.value), placeholder: "John Doe" }), _jsx("label", { className: "field-label", htmlFor: "signup-dob", children: "Date of Birth" }), _jsx("input", { id: "signup-dob", className: "input", type: "date", value: signupDob, onChange: (event) => setSignupDob(event.target.value) }), _jsx("label", { className: "field-label", htmlFor: "signup-email", children: "Employee email" }), _jsx("input", { id: "signup-email", className: "input", type: "email", value: signupEmail, onChange: (event) => setSignupEmail(event.target.value), placeholder: "employee@example.com" }), _jsx("label", { className: "field-label", htmlFor: "signup-password", children: "Set password" }), _jsx("input", { id: "signup-password", className: "input", type: "password", value: signupPassword, onChange: (event) => setSignupPassword(event.target.value), placeholder: "Create a password" }), _jsx("label", { className: "field-label", htmlFor: "signup-manager", children: "Manager employee ID" }), _jsx("input", { id: "signup-manager", className: "input", value: signupManagerCode, onChange: (event) => setSignupManagerCode(event.target.value), placeholder: "1301" }), _jsx("button", { className: "button primary", type: "submit", children: "Create employee account" })] })) : mode === 'employee-signin' ? (_jsxs("form", { className: "auth-form stack", onSubmit: submitSignIn, children: [_jsx("label", { className: "field-label", htmlFor: "signin-email", children: "Email" }), _jsx("input", { id: "signin-email", className: "input", type: "email", value: signinEmail, onChange: (event) => setSigninEmail(event.target.value), placeholder: "employee@example.com" }), _jsx("label", { className: "field-label", htmlFor: "signin-password", children: "Password" }), _jsx("input", { id: "signin-password", className: "input", type: "password", value: signinPassword, onChange: (event) => setSigninPassword(event.target.value), placeholder: "Your password" }), _jsx("button", { className: "button primary", type: "submit", children: "Sign in" })] })) : (_jsxs("form", { className: "auth-form stack", onSubmit: submitSignIn, children: [_jsx("label", { className: "field-label", htmlFor: "manager-email", children: "Manager email" }), _jsx("input", { id: "manager-email", className: "input", type: "email", value: signinEmail, onChange: (event) => setSigninEmail(event.target.value), placeholder: "manager@example.com" }), _jsx("label", { className: "field-label", htmlFor: "manager-password", children: "Password" }), _jsx("input", { id: "manager-password", className: "input", type: "password", value: signinPassword, onChange: (event) => setSigninPassword(event.target.value), placeholder: "Your password" }), _jsx("button", { className: "button primary", type: "submit", children: "Manager login" }), _jsx("div", { className: "hint" })] }))] }) }));
 }
 function App() {
     const [state, setState] = useState(loadState);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
+    const hasHydratedCloud = useRef(false);
     useEffect(() => {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        if (!CLOUD_STATE_URL || !hasHydratedCloud.current)
+            return;
+        const controller = new AbortController();
+        void fetch(CLOUD_STATE_URL, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state),
+            signal: controller.signal,
+        }).catch((fetchError) => {
+            console.error('Cloud save failed', fetchError);
+        });
+        return () => controller.abort();
     }, [state]);
+    useEffect(() => {
+        if (!CLOUD_STATE_URL)
+            return;
+        const controller = new AbortController();
+        void fetch(CLOUD_STATE_URL, { signal: controller.signal })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((remoteState) => {
+            if (!remoteState) {
+                hasHydratedCloud.current = true;
+                return;
+            }
+            setState((current) => {
+                const mergedState = mergeAppState(current, remoteState);
+                window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
+                return mergedState;
+            });
+            hasHydratedCloud.current = true;
+        })
+            .catch((fetchError) => {
+            console.error('Cloud load failed', fetchError);
+            hasHydratedCloud.current = true;
+        });
+        return () => controller.abort();
+    }, []);
     const authenticatedUser = state.users.find((user) => user.id === state.activeUserId) ?? null;
     const currentUser = authenticatedUser ?? state.users[0];
     const isAuthenticated = Boolean(authenticatedUser);
