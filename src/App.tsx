@@ -230,7 +230,7 @@ function AuthScreen({
             <input id="manager-password" className="input" type="password" value={signinPassword} onChange={(event) => setSigninPassword(event.target.value)} placeholder="Your password" />
 
             <button className="button primary" type="submit">Manager login</button>
-            <div className="hint">Example: sk.39648215@gmail.com | Sachin1301</div>
+            <div className="hint"></div>
           </form>
         )}
       </section>
