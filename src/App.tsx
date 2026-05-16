@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, useRef, type FormEvent } from 'react';
 import { createEmployeeSignupRecords, createSeedState } from './data';
 import type {
   AppState,
@@ -30,6 +30,7 @@ import {
 } from './utils';
 
 const STORAGE_KEY = 'atomquest.goal.portal.state.v1';
+const CLOUD_STATE_URL = import.meta.env.VITE_CLOUD_STATE_URL?.trim() || '';
 
 const thrustAreas = ['Revenue Growth', 'Operational Excellence', 'Service Quality', 'Risk & Safety', 'Shared KPI'];
 const uomOptions: UomType[] = ['Numeric', 'Percent', 'Timeline', 'Zero'];
@@ -70,6 +71,26 @@ function loadState(): AppState {
   } catch {
     return createSeedState();
   }
+}
+
+
+function mergeUniqueById<T extends { id: string }>(primary: T[], secondary: T[]): T[] {
+  const map = new Map<string, T>();
+  secondary.forEach((item) => map.set(item.id, item));
+  primary.forEach((item) => map.set(item.id, { ...(map.get(item.id) ?? {}), ...item } as T));
+  return [...map.values()];
+}
+
+function mergeAppState(base: AppState, incoming: Partial<AppState>): AppState {
+  return {
+    ...base,
+    ...incoming,
+    users: mergeUniqueById(incoming.users ?? [], base.users),
+    employees: mergeUniqueById(incoming.employees ?? [], base.employees),
+    goalSheets: mergeUniqueById(incoming.goalSheets ?? [], base.goalSheets),
+    auditTrail: mergeUniqueById(incoming.auditTrail ?? [], base.auditTrail),
+    activeUserId: null,
+  };
 }
 
 function goalTemplate(): GoalItem {
@@ -133,17 +154,21 @@ function AuthScreen({
   const [signupManagerCode, setSignupManagerCode] = useState('1301');
   
   const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+  // Backward-compatible aliases to avoid breakage during partial merges/cherry-picks.
+  const notice = authNotice;
+  const setNotice = setAuthNotice;
 
   function submitSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = onSignIn(signinEmail.trim(), signinPassword);
     if (message) {
       setAuthError(message);
-      setNotice('');
+      setAuthNotice('');
       return;
     }
     setAuthError('');
-    setNotice('');
+    setAuthNotice('');
   }
 
   function submitSignUp(event: FormEvent<HTMLFormElement>) {
@@ -151,7 +176,7 @@ function AuthScreen({
     const message = onSignUp(signupName.trim(), signupDob, signupEmail.trim(), signupPassword, signupManagerCode.trim());
     if (message) {
       setAuthError(message);
-      setNotice('');
+      setAuthNotice('');
       return;
     }
     setMode('employee-signin');
@@ -162,7 +187,7 @@ function AuthScreen({
     setSignupEmail('');
     setSignupPassword('');
     setAuthError('');
-    setNotice('Account created successfully. Please sign in with the new employee credentials.');
+    setAuthNotice('Account created successfully. Please sign in with the new employee credentials.');
   }
 
   return (
@@ -190,6 +215,7 @@ function AuthScreen({
 
        
         {authError ? <div className="banner danger">{authError}</div> : null}
+        {authNotice ? <div className="banner success">{authNotice}</div> : null}
 
         {mode === 'signup' ? (
           <form className="auth-form stack" onSubmit={submitSignUp}>
@@ -242,10 +268,51 @@ function App() {
   const [state, setState] = useState<AppState>(loadState);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const hasHydratedCloud = useRef(false);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    if (!CLOUD_STATE_URL || !hasHydratedCloud.current) return;
+
+    const controller = new AbortController();
+    void fetch(CLOUD_STATE_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+      signal: controller.signal,
+    }).catch((fetchError) => {
+      console.error('Cloud save failed', fetchError);
+    });
+
+    return () => controller.abort();
   }, [state]);
+
+  useEffect(() => {
+    if (!CLOUD_STATE_URL) return;
+
+    const controller = new AbortController();
+    void fetch(CLOUD_STATE_URL, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((remoteState) => {
+        if (!remoteState) {
+          hasHydratedCloud.current = true;
+          return;
+        }
+        setState((current) => {
+          const mergedState = mergeAppState(current, remoteState as Partial<AppState>);
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
+          return mergedState;
+        });
+        hasHydratedCloud.current = true;
+      })
+      .catch((fetchError) => {
+        console.error('Cloud load failed', fetchError);
+        hasHydratedCloud.current = true;
+      });
+
+    return () => controller.abort();
+  }, []);
 
   const authenticatedUser = state.users.find((user) => user.id === state.activeUserId) ?? null;
   const currentUser = authenticatedUser ?? state.users[0];
