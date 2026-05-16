@@ -1,0 +1,23 @@
+import type { AuditEntry, GoalItem, GoalStatus, PerformanceDirection, SheetStatus, UomType } from './types';
+export declare function uid(prefix: string): string;
+export declare function isoNow(): string;
+export declare function parseDate(value: string): Date;
+export declare function formatDate(value?: string): string;
+export declare function formatDateTime(value: string): string;
+export declare function toDateInputValue(value?: string): string;
+export declare function clampNumber(value: number, min: number, max: number): number;
+export declare function getQuarterLabel(date: Date): string;
+export declare function getQuarterCode(date: Date): string;
+export declare function calculateProgress(goal: GoalItem): number;
+export declare function validateSheet(goals: GoalItem[]): string[];
+export declare function createAuditEntry(entry: Omit<AuditEntry, 'id' | 'timestamp'>): AuditEntry;
+export declare function summarizeProgress(goals: GoalItem[]): {
+    completed: number;
+    onTrack: number;
+    notStarted: number;
+    average: number;
+};
+export declare function toCsv(rows: Record<string, string | number | undefined>[]): string;
+export declare function statusTone(status: GoalStatus | SheetStatus): string;
+export declare function directionLabel(direction: PerformanceDirection): string;
+export declare function uomLabel(uom: UomType): string;
