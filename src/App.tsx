@@ -209,7 +209,7 @@ function AuthScreen({
             <input id="signup-manager" className="input" value={signupManagerCode} onChange={(event) => setSignupManagerCode(event.target.value)} placeholder="1301" />
 
             <button className="button primary" type="submit">Create employee account</button>
-            <div className="hint">Example manager: email sk.39648215@gmail.com, employee ID 1301</div>
+            
           </form>
         ) : mode === 'employee-signin' ? (
           <form className="auth-form stack" onSubmit={submitSignIn}>
