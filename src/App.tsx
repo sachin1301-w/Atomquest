@@ -131,7 +131,7 @@ function AuthScreen({
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupManagerCode, setSignupManagerCode] = useState('1301');
-  const [notice, setNotice] = useState('Create a new employee account or sign in to your existing account. Managers can use the manager login.');
+  
   const [authError, setAuthError] = useState('');
 
   function submitSignIn(event: FormEvent<HTMLFormElement>) {
