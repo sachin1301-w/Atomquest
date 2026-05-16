@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Atomquest Goal Portal
 
 Functional demo portal for employee goal setting, manager approvals, quarterly check-ins, shared KPI sync, reporting, and audit trail management.
@@ -57,3 +58,6 @@ flowchart LR
 
 - The demo uses seeded data and browser persistence instead of a backend to keep the hackathon delivery lightweight.
 - The quarter window can be simulated from the Admin date picker.
+=======
+# Atomquest
+>>>>>>> bb3e375fa2417fd6cea3a83fa72cc54591c47750
